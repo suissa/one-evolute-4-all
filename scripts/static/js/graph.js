@@ -1,3 +1,4 @@
+// @ts-check
 import { getHighlightNodes, allNodeData, selectedProgramId, setSelectedProgramId, lastDataStr } from './main.js';
 import { width, height } from './state.js';
 import { openInNewTab, showSidebarContent, sidebarSticky, showSidebar, setSidebarSticky, hideSidebar } from './sidebar.js';

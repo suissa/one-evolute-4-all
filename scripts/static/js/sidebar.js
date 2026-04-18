@@ -1,3 +1,4 @@
+// @ts-check
 import { allNodeData, archiveProgramIds, formatMetrics, renderMetricBar, getHighlightNodes, selectedProgramId, setSelectedProgramId } from './main.js';
 import { scrollAndSelectNodeById } from './graph.js';
 

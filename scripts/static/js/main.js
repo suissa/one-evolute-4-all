@@ -1,19 +1,33 @@
+// @ts-check
 // main.js for OpenEvolve Evolution Visualizer
+
+/** @typedef {import('./types').GraphData} GraphData */
+/** @typedef {import('./types').GraphNode} GraphNode */
+/** @typedef {import('./types').MetricMap} MetricMap */
+/** @typedef {import('./types').MetricRange} MetricRange */
 
 import { sidebarSticky, showSidebarContent } from './sidebar.js';
 import { updateListSidebarLayout, renderNodeList } from './list.js';
 import { renderGraph, g, getNodeRadius, animateGraphNodeAttributes } from './graph.js';
 
+/** @type {GraphNode[]} */
 export let allNodeData = [];
+/** @type {Record<string, MetricRange>} */
 let metricMinMax = {};
 
+/** @type {string[]} */
 let archiveProgramIds = [];
 
 const sidebarEl = document.getElementById('sidebar');
 
+/** @type {string | null} */
 let lastDataStr = null;
+/** @type {string | null} */
 let selectedProgramId = null;
 
+/**
+ * @param {GraphNode[] | undefined} nodes
+ */
 function computeMetricMinMax(nodes) {
     metricMinMax = {};
     if (!nodes) return;
@@ -31,7 +45,6 @@ function computeMetricMinMax(nodes) {
             }
         }
     });
-    // Avoid min==max
     for (const k in metricMinMax) {
         if (metricMinMax[k].min === metricMinMax[k].max) {
             metricMinMax[k].min = 0;
@@ -40,6 +53,9 @@ function computeMetricMinMax(nodes) {
     }
 }
 
+/**
+ * @param {MetricMap | undefined} metrics
+ */
 function formatMetrics(metrics) {
     if (!metrics || typeof metrics !== 'object') return '';
     let rows = Object.entries(metrics).map(([k, v]) => {
@@ -48,12 +64,18 @@ function formatMetrics(metrics) {
             min = metricMinMax[k].min;
             max = metricMinMax[k].max;
         }
-        let valStr = (typeof v === 'number' && isFinite(v)) ? v.toFixed(4) : v;
+        let valStr = (typeof v === 'number' && isFinite(v)) ? v.toFixed(4) : String(v ?? '');
         return `<tr><td style='padding-right:0.7em;'><b>${k}</b></td><td style='padding-right:0.7em;'>${valStr}</td><td style='min-width:90px;'>${typeof v === 'number' ? renderMetricBar(v, min, max) : ''}</td></tr>`;
     }).join('');
     return `<table class='metrics-table'><tbody>${rows}</tbody></table>`;
 }
 
+/**
+ * @param {number | string | null | undefined} value
+ * @param {number} min
+ * @param {number} max
+ * @param {{vertical?: boolean}} [opts]
+ */
 function renderMetricBar(value, min, max, opts={}) {
     let percent = 0;
     if (typeof value === 'number' && isFinite(value)) {
@@ -61,7 +83,7 @@ function renderMetricBar(value, min, max, opts={}) {
             percent = (value - min) / (max - min);
             percent = Math.max(0, Math.min(1, percent));
         } else if (max === min) {
-            percent = 1; // Show as filled if min==max
+            percent = 1;
         }
     }
     let minLabel = `<span class="metric-bar-min">${min.toFixed(2)}</span>`;
@@ -76,14 +98,20 @@ function renderMetricBar(value, min, max, opts={}) {
     </span>`;
 }
 
+/** @param {GraphData} data */
 function loadAndRenderData(data) {
     archiveProgramIds = Array.isArray(data.archive) ? data.archive : [];
     lastDataStr = JSON.stringify(data);
+    setAllNodeData(data.nodes);
     renderGraph(data);
     renderNodeList(data.nodes);
-    document.getElementById('checkpoint-label').textContent =
-        "Checkpoint: " + (data.checkpoint_dir || 'static export');
-    const metricSelect = document.getElementById('metric-select');
+    const checkpointLabel = document.getElementById('checkpoint-label');
+    if (checkpointLabel) {
+        checkpointLabel.textContent = "Checkpoint: " + (data.checkpoint_dir || 'static export');
+    }
+    const metricSelect = /** @type {HTMLSelectElement | null} */ (document.getElementById('metric-select'));
+    if (!metricSelect) return;
+
     const prevMetric = metricSelect.value || localStorage.getItem('selectedMetric') || null;
     metricSelect.innerHTML = '';
     const metrics = new Set();
@@ -94,8 +122,8 @@ function loadAndRenderData(data) {
     });
     metrics.forEach(metric => {
         const option = document.createElement('option');
-        option.value = metric;
-        option.textContent = metric;
+        option.value = String(metric);
+        option.textContent = String(metric);
         metricSelect.appendChild(option);
     });
     if (prevMetric && metrics.has(prevMetric)) {
@@ -121,7 +149,7 @@ if (window.STATIC_DATA) {
     function fetchAndRender() {
         fetch('/api/data')
             .then(resp => resp.json())
-            .then(data => {
+            .then(/** @param {GraphData} data */ (data) => {
                 const dataStr = JSON.stringify(data);
                 if (dataStr === lastDataStr) {
                     return;
@@ -131,7 +159,7 @@ if (window.STATIC_DATA) {
             });
     }
     fetchAndRender();
-    setInterval(fetchAndRender, 2000); // Live update every 2s
+    setInterval(fetchAndRender, 2000);
 }
 
 export let width = window.innerWidth;
@@ -139,16 +167,14 @@ export let height = window.innerHeight;
 
 function resize() {
     width = window.innerWidth;
-    const toolbarHeight = document.getElementById('toolbar').offsetHeight;
+    const toolbarHeight = document.getElementById('toolbar')?.offsetHeight ?? 0;
     height = window.innerHeight - toolbarHeight;
-    // Re-render the graph with new width/height and latest data
-    // allNodeData may be [] on first load, so only re-render if nodes exist
     if (allNodeData && allNodeData.length > 0) {
-        // Find edges from lastDataStr if possible, else from allNodeData
+        /** @type {import('./types').GraphEdge[]} */
         let edges = [];
         if (typeof lastDataStr === 'string') {
             try {
-                const parsed = JSON.parse(lastDataStr);
+                const parsed = /** @type {GraphData} */ (JSON.parse(lastDataStr));
                 edges = parsed.edges || [];
             } catch {}
         }
@@ -157,17 +183,20 @@ function resize() {
 }
 window.addEventListener('resize', resize);
 
-// Highlight logic for graph and list views
+/**
+ * @param {GraphNode[]} nodes
+ * @param {string} filter
+ * @param {string} metric
+ */
 function getHighlightNodes(nodes, filter, metric) {
     if (!filter) return [];
     if (filter === 'top') {
         let best = -Infinity;
         nodes.forEach(n => {
-            if (n.metrics && typeof n.metrics[metric] === 'number') {
-                if (n.metrics[metric] > best) best = n.metrics[metric];
-            }
+            const mv = n.metrics?.[metric];
+            if (typeof mv === 'number' && mv > best) best = mv;
         });
-        return nodes.filter(n => n.metrics && n.metrics[metric] === best);
+        return nodes.filter(n => n.metrics?.[metric] === best);
     } else if (filter === 'first') {
         return nodes.filter(n => n.generation === 0);
     } else if (filter === 'failed') {
@@ -181,7 +210,7 @@ function getHighlightNodes(nodes, filter, metric) {
 }
 
 function getSelectedMetric() {
-    const metricSelect = document.getElementById('metric-select');
+    const metricSelect = /** @type {HTMLSelectElement | null} */ (document.getElementById('metric-select'));
     return metricSelect && metricSelect.value ? metricSelect.value : 'combined_score';
 }
 
@@ -190,7 +219,6 @@ function getSelectedMetric() {
     const metricSelect = document.getElementById('metric-select');
     const highlightSelect = document.getElementById('highlight-select');
     if (toolbar && metricSelect && highlightSelect) {
-        // Only move if both are direct children of toolbar and not already in order
         if (
             metricSelect.parentElement === toolbar &&
             highlightSelect.parentElement === toolbar &&
@@ -202,63 +230,32 @@ function getSelectedMetric() {
     }
 })();
 
-// Add event listener to re-highlight nodes on highlight-select change (no full rerender)
-const highlightSelect = document.getElementById('highlight-select');
-highlightSelect.addEventListener('change', function() {
-    animateGraphNodeAttributes();
-    // Update list view
-    const container = document.getElementById('node-list-container');
-    if (container) {
-        Array.from(container.children).forEach(div => {
-            const nodeId = div.innerHTML.match(/<b>ID:<\/b>\s*([^<]+)/);
-            if (nodeId && nodeId[1]) {
-                div.classList.toggle('highlighted', getHighlightNodes(allNodeData, highlightSelect.value, getSelectedMetric()).map(n => n.id).includes(nodeId[1]));
-            }
-        });
-    }
-});
-
-// Add event listener to re-highlight nodes and update radii on metric-select change (no full rerender)
-const metricSelect = document.getElementById('metric-select');
-metricSelect.addEventListener('change', function() {
-    animateGraphNodeAttributes();
-    renderNodeList(allNodeData);
-});
+const highlightSelect = /** @type {HTMLSelectElement | null} */ (document.getElementById('highlight-select'));
+if (highlightSelect) {
+    highlightSelect.addEventListener('change', function() {
+        animateGraphNodeAttributes();
+        const container = document.getElementById('node-list-container');
+        if (container) {
+            Array.from(container.children).forEach(div => {
+                const nodeId = div.innerHTML.match(/<b>ID:<\/b>\s*([^<]+)/);
+                if (nodeId && nodeId[1]) {
+                    div.classList.toggle('highlighted', getHighlightNodes(allNodeData, highlightSelect.value, getSelectedMetric()).map(n => n.id).includes(nodeId[1]));
+                }
+            });
+        }
+    });
+}
 
 
-// Call on tab switch and window resize
-['resize', 'DOMContentLoaded'].forEach(evt => window.addEventListener(evt, updateListSidebarLayout));
-document.getElementById('tab-list').addEventListener('click', updateListSidebarLayout);
-document.getElementById('tab-branching').addEventListener('click', function() {
-    // Hide sidebar if it was hidden in branching
-    const viewList = document.getElementById('view-list');
-    if (sidebarEl.style.transform === 'translateX(100%)') {
-        sidebarEl.style.transform = 'translateX(100%)';
-    }
-    viewList.style.marginRight = '0';
-});
-
-
-
-// --- Add highlight option for MAP-elites archive ---
-(function() {
-    const highlightSelect = document.getElementById('highlight-select');
-    if (highlightSelect && !Array.from(highlightSelect.options).some(o => o.value === 'archive')) {
-        const opt = document.createElement('option');
-        opt.value = 'archive';
-        opt.textContent = 'MAP-elites archive';
-        highlightSelect.appendChild(opt);
-    }
-})();
-
-// Export all shared state and helpers for use in other modules
+/** @param {GraphNode[]} nodes */
 export function setAllNodeData(nodes) {
     allNodeData = nodes;
     computeMetricMinMax(nodes);
 }
 
+export { computeMetricMinMax, formatMetrics, getHighlightNodes, selectedProgramId, lastDataStr, archiveProgramIds, renderMetricBar, getSelectedMetric };
+
+/** @param {string | null} id */
 export function setSelectedProgramId(id) {
     selectedProgramId = id;
 }
-
-export { archiveProgramIds, lastDataStr, selectedProgramId, formatMetrics, renderMetricBar, getHighlightNodes, getSelectedMetric, metricMinMax };
