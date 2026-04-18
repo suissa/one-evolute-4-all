@@ -1,3 +1,4 @@
+// @ts-check
 import { width, height } from './state.js';
 import { selectedProgramId } from './main.js';
 import { selectProgram } from './graph.js';
