@@ -1,3 +1,4 @@
+// @ts-check
 import { allNodeData, archiveProgramIds, formatMetrics, renderMetricBar, getHighlightNodes, getSelectedMetric, selectedProgramId, setSelectedProgramId } from './main.js';
 import { getNodeRadius, getNodeColor, selectProgram, scrollAndSelectNodeById } from './graph.js';
 import { hideSidebar, sidebarSticky, showSidebarContent, showSidebar, setSidebarSticky } from './sidebar.js';
