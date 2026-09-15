@@ -1,0 +1,13 @@
+{
+  "name": "one-evolute-4-all",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Monorepo tooling for OpenEvolve, including strict TypeScript checks for the visualizer frontend",
+  "scripts": {
+    "typecheck": "tsc -p scripts/static/tsconfig.json",
+    "typecheck:watch": "tsc -p scripts/static/tsconfig.json --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
